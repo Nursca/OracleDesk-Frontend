@@ -1,15 +1,26 @@
 "use client";
 
 import React, { useState, useRef } from "react";
+import { useSignTypedData } from "wagmi";
+import { useWallet } from "@/lib/contexts/WalletContext";
+import { buildPolymarketOrderPayload, submitPolymarketOrder, POLYMARKET_EIP712_DOMAIN, POLYMARKET_ORDER_TYPES } from "@/lib/web3/polymarket";
+
+const COPY_TRADE_BUILDER_CODE = "ORACLE_COPY_AI";
+const COPY_TRADE_TOKEN_ID = "1";
 
 export default function CopyTradePage() {
+  const { address, isConnected, chainId, openModal } = useWallet();
+  const { signTypedDataAsync } = useSignTypedData();
   const [allocation, setAllocation] = useState(12.5);
   const [isMevProtected, setIsMevProtected] = useState(true);
   const [slippage, setSlippage] = useState(1.0);
+  const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const sliderRef = useRef<HTMLDivElement>(null);
 
   const totalBankroll = 42000; // Example total bankroll
   const allocatedAmount = (totalBankroll * allocation) / 100;
+  const usdcAmount = Math.max(1, Math.round(allocatedAmount));
 
   const handleSliderInteraction = (clientX: number) => {
     if (!sliderRef.current) return;
@@ -34,6 +45,66 @@ export default function CopyTradePage() {
     handleSliderInteraction(e.touches[0].clientX);
   };
 
+  const handleConfirm = async () => {
+    if (!isConnected || !address) {
+      setStatusMessage("Connect your wallet to confirm the copy trade.");
+      openModal();
+      return;
+    }
+
+    if (chainId && chainId !== 137) {
+      setStatusMessage("Switch your wallet to Polygon mainnet to execute this trade.");
+      return;
+    }
+
+    setIsSubmitting(true);
+    setStatusMessage(null);
+
+    try {
+      const payload = buildPolymarketOrderPayload(
+        {
+          tokenId: COPY_TRADE_TOKEN_ID,
+          usdcAmount,
+          price: 0.682,
+          side: "BUY",
+          builderCode: COPY_TRADE_BUILDER_CODE,
+        },
+        address
+      );
+
+      const typedOrder = {
+        ...payload.order,
+        salt: BigInt(payload.order.salt),
+        maker: payload.order.maker as `0x${string}`,
+        signer: payload.order.signer as `0x${string}`,
+        taker: payload.order.taker as `0x${string}`,
+        tokenId: BigInt(payload.order.tokenId),
+        makerAmount: BigInt(payload.order.makerAmount),
+        takerAmount: BigInt(payload.order.takerAmount),
+        expiration: BigInt(payload.order.expiration),
+        nonce: BigInt(payload.order.nonce),
+        feeRateBps: BigInt(payload.order.feeRateBps),
+      };
+
+      const signature = await signTypedDataAsync({
+        domain: POLYMARKET_EIP712_DOMAIN,
+        types: POLYMARKET_ORDER_TYPES,
+        primaryType: "Order",
+        message: typedOrder,
+      });
+
+      const result = await submitPolymarketOrder({ ...payload, signature });
+
+      setStatusMessage(`Copy trade submitted. Order ID: ${result.orderId || "unknown"}`);
+    } catch (error) {
+      setStatusMessage(
+        error instanceof Error ? `Trade failed: ${error.message}` : "Trade failed. Please try again."
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   return (
     <div className="bg-background text-on-surface min-h-screen flex flex-col">
       <style jsx global>{`
@@ -54,21 +125,17 @@ export default function CopyTradePage() {
       `}</style>
 
       <main className="flex-grow flex items-center justify-center p-4 sm:p-margin relative">
-        {/* Fixed Backdrop - Blurs everything including the global Navbar (z-50) */}
         <div className="fixed inset-0 bg-on-background/10 backdrop-blur-sm z-[55]"></div>
 
-        {/* Copy Trade Modal Canvas */}
         <div className="relative bg-surface border border-outline-variant w-full max-w-[640px] shadow-xl rounded-xl overflow-hidden z-[60] animate-in fade-in zoom-in duration-300">
-          {/* Modal Header */}
           <div className="px-6 py-4 border-b border-outline-variant flex justify-between items-center bg-white">
             <div>
               <h2 className="font-headline-md text-headline-md text-on-surface">Confirm Copy Trade</h2>
               <p className="font-body-md text-body-md text-on-surface-variant text-sm">Execution through OracleDesk Institutional Routing</p>
             </div>
-            <button className="material-symbols-outlined p-2 hover:bg-surface-container rounded-full transition-colors">close</button>
+            <button className="material-symbols-outlined p-2 hover:bg-surface-container rounded-full transition-colors" type="button">close</button>
           </div>
 
-          {/* AI Reasoning Section */}
           <div className="bg-[#f0f9fa] border-b border-outline-variant p-6 relative overflow-hidden ai-shimmer text-xs sm:text-sm">
             <div className="flex items-start gap-4">
               <div className="bg-primary-container p-2 rounded-lg flex-shrink-0">
@@ -84,7 +151,6 @@ export default function CopyTradePage() {
           </div>
 
           <div className="p-6 space-y-6">
-            {/* Market Context & Proposed Side */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="p-4 border border-outline-variant rounded-lg bg-white">
                 <span className="font-label-caps text-label-caps text-on-surface-variant block mb-2 uppercase text-[10px]">Proposed Side</span>
@@ -102,7 +168,6 @@ export default function CopyTradePage() {
               </div>
             </div>
 
-            {/* Bankroll Allocation */}
             <div className="space-y-3">
               <div className="flex justify-between items-end flex-wrap gap-2">
                 <label className="font-label-caps text-label-caps text-on-surface-variant uppercase text-[10px]">Bankroll Allocation (%)</label>
@@ -110,21 +175,15 @@ export default function CopyTradePage() {
                   {allocation.toFixed(2)}% (${allocatedAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })})
                 </span>
               </div>
-              <div 
+              <div
                 ref={sliderRef}
                 className="relative h-2 bg-surface-container rounded-full cursor-pointer touch-none"
                 onMouseDown={onMouseDown}
                 onTouchStart={(e) => handleSliderInteraction(e.touches[0].clientX)}
                 onTouchMove={onTouchMove}
               >
-                <div 
-                  className="absolute inset-y-0 left-0 bg-primary-container rounded-full"
-                  style={{ width: `${allocation}%` }}
-                ></div>
-                <div 
-                  className="absolute top-1/2 -translate-y-1/2 w-4 h-4 bg-primary border-2 border-white rounded-full shadow-md"
-                  style={{ left: `calc(${allocation}% - 8px)` }}
-                ></div>
+                <div className="absolute inset-y-0 left-0 bg-primary-container rounded-full" style={{ width: `${allocation}%` }}></div>
+                <div className="absolute top-1/2 -translate-y-1/2 w-4 h-4 bg-primary border-2 border-white rounded-full shadow-md" style={{ left: `calc(${allocation}% - 8px)` }}></div>
               </div>
               <div className="flex justify-between text-[10px] font-medium text-on-surface-variant px-1">
                 <span>0%</span>
@@ -135,7 +194,6 @@ export default function CopyTradePage() {
               </div>
             </div>
 
-            {/* Advanced Settings Section */}
             <div className="p-4 bg-surface-container-low rounded-lg space-y-4">
               <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
                 <div className="flex items-center gap-2">
@@ -163,7 +221,7 @@ export default function CopyTradePage() {
                   <span className="material-symbols-outlined text-outline text-sm">security</span>
                   <span className="font-label-caps text-label-caps text-on-surface-variant uppercase text-[10px]">MEV Protection</span>
                 </div>
-                <button 
+                <button
                   onClick={() => setIsMevProtected(!isMevProtected)}
                   className="relative inline-flex items-center cursor-pointer focus:outline-none"
                 >
@@ -173,11 +231,20 @@ export default function CopyTradePage() {
               </div>
             </div>
 
-            {/* Confirm Action */}
             <div className="space-y-3">
-              <button className="w-full bg-[#005f73] text-primary-foreground py-4 rounded-lg font-headline-sm text-headline-sm shadow-lg shadow-primary-container/20 hover:brightness-110 active:scale-[0.98] transition-all flex items-center justify-center gap-2 cursor-pointer">
+              {statusMessage ? (
+                <div className="rounded-2xl border border-outline-variant bg-surface p-4 text-sm text-on-surface-variant">
+                  {statusMessage}
+                </div>
+              ) : null}
+              <button
+                className="w-full bg-[#005f73] text-primary-foreground py-4 rounded-lg font-headline-sm text-headline-sm shadow-lg shadow-primary-container/20 hover:brightness-110 active:scale-[0.98] transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                onClick={handleConfirm}
+                type="button"
+                disabled={isSubmitting}
+              >
                 <span className="material-symbols-outlined text-xl">bolt</span>
-                Confirm Copy Trade
+                {isSubmitting ? "Submitting..." : "Confirm Copy Trade"}
               </button>
               <p className="text-center font-body-md text-body-md text-on-surface-variant text-xs">
                 By confirming, you authorize execution on <span className="underline decoration-dotted cursor-help">Polymarket</span> and <span className="underline decoration-dotted cursor-help">Kalshi</span>.
