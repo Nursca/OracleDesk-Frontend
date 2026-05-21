@@ -3,7 +3,7 @@ import { Geist, Geist_Mono, Inter } from "next/font/google";
 import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
 import { WalletProvider } from "@/lib/contexts/WalletContext";
-import { ConnectWalletModal } from "@/components/modals/ConnectWalletModal";
+import { headers } from "next/headers";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -26,11 +26,14 @@ export const metadata: Metadata = {
   description: "The world's most accurate AI-driven prediction terminal.",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const headersList = await headers();
+  const cookies = headersList.get("cookie");
+
   return (
     <html
       lang="en"
@@ -43,11 +46,10 @@ export default function RootLayout({
         />
       </head>
       <body className="min-h-full flex flex-col font-body-md text-on-surface">
-        <WalletProvider>
+        <WalletProvider cookies={cookies}>
           <Navbar />
           {children}
           <Footer />
-          <ConnectWalletModal />
         </WalletProvider>
       </body>
     </html>

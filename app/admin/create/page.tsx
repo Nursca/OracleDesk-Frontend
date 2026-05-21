@@ -63,7 +63,7 @@ export default function AdminPage() {
             </p>
           </div>
           <button
-            onClick={connect}
+            onClick={() => connect()}
             className="w-full bg-primary text-primary-foreground py-4 rounded-lg font-label-caps text-label-caps hover:brightness-110 transition-all flex items-center justify-center gap-2 shadow-lg cursor-pointer"
           >
             <span className="material-symbols-outlined">account_balance_wallet</span>
