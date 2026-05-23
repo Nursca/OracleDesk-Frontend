@@ -1,7 +1,8 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import React, { useState, useEffect, useRef } from "react";
+import Link from "next/link";
+import { motion } from "framer-motion";
 
 const Ticker = () => {
   const tickerItems = [
@@ -69,9 +70,9 @@ const Hero = () => {
             transition={{ delay: 0.3 }}
             className="flex flex-wrap gap-4"
           >
-            <a href="/markets" className="bg-primary text-on-primary px-8 py-4 rounded-lg font-label-caps text-label-caps tracking-widest hover:brightness-110 transition-all flex items-center gap-2">
+            <Link href="/markets" className="bg-primary text-primary-foreground px-8 py-4 rounded-lg font-label-caps text-label-caps tracking-widest hover:brightness-110 transition-all flex items-center gap-2">
               BROWSE MARKETS <span className="material-symbols-outlined">trending_up</span>
-            </a>
+            </Link>
             <button className="border border-outline text-primary px-8 py-4 rounded-lg font-label-caps text-label-caps tracking-widest hover:bg-surface-container-low transition-all">
               VIEW AI FORECASTS
             </button>
@@ -141,7 +142,7 @@ const MarketCard = ({ icon, category, change, title, prob, volume, color = "seco
         </div>
         <span className={`font-data-mono text-[12px] ${change.startsWith('+') ? 'text-secondary' : change.startsWith('-') ? 'text-tertiary' : 'text-on-surface-variant'}`}>{change}</span>
       </div>
-      <h3 className="font-headline-sm mb-4 line-clamp-2 min-h-[3.5rem]">{title}</h3>
+      <h3 className="font-headline-sm mb-4">{title}</h3>
       <div className="flex items-center gap-4 mb-6">
         <div className="flex-1">
           <div className="h-2 w-full bg-surface-container rounded-full overflow-hidden">
@@ -152,7 +153,7 @@ const MarketCard = ({ icon, category, change, title, prob, volume, color = "seco
       </div>
       <div className="flex justify-between items-center">
         <div className="text-label-caps text-on-surface-variant">Vol: {volume}</div>
-        <button className="bg-primary text-on-primary px-4 py-2 rounded font-label-caps text-[10px] uppercase group-hover:bg-primary-container transition-colors">Trade Now</button>
+        <button className="bg-primary text-primary-foreground px-4 py-2 rounded font-label-caps text-[10px] uppercase group-hover:bg-primary-container">Trade Now</button>
       </div>
     </a>
   );
@@ -212,6 +213,19 @@ const ReasoningSection = () => {
   return (
     <section className="bg-surface-container-low py-20">
       <div className="max-w-container-max-width mx-auto px-gutter grid lg:grid-cols-2 gap-16 items-center">
+        <div className="order-2 lg:order-1">
+          <div className="bg-on-background text-primary-fixed-dim rounded-xl overflow-hidden shadow-2xl border border-outline p-8 h-80 flex flex-col justify-center">
+            <div className="font-data-mono text-sm space-y-2 overflow-hidden opacity-80">
+              <p>&gt; INITIALIZING ORACLE TRACE 0x77AF...</p>
+              <p>&gt; ANALYZING 14,204 DATA POINTS</p>
+              <p>&gt; CROSS-REFERENCING HISTORICAL FOMC SENTIMENT</p>
+              <p>&gt; CORRELATION DETECTED: 0.89 WITH 2019 PIVOT</p>
+              <p>&gt; CALCULATING CONFIDENCE INTERVALS...</p>
+              <p>&gt; TRACE ANCHORED ON ETHEREUM MAINNET</p>
+              <p className="text-secondary animate-pulse">&gt; VERDICT: DOVISH SHIFT CONFIRMED</p>
+            </div>
+          </div>
+        </div>
         <div className="order-1 lg:order-2">
           <div className="flex items-center gap-2 mb-4 text-primary">
             <span className="material-symbols-outlined">psychology</span>
@@ -247,7 +261,7 @@ const ReasoningSection = () => {
   );
 };
 
-const PortfolioAnalyticsPreview = () => {
+const PortfolioAnalytics = () => {
   return (
     <section className="py-24 max-w-container-max-width mx-auto px-gutter">
       <div className="text-center mb-16">
@@ -263,7 +277,7 @@ const PortfolioAnalyticsPreview = () => {
             </div>
             <div className="flex gap-2 items-center">
               <button className="px-3 py-1 bg-surface-container rounded font-label-caps text-[10px]">1D</button>
-              <button className="px-3 py-1 bg-primary text-on-primary rounded font-label-caps text-[10px]">1W</button>
+              <button className="px-3 py-1 bg-primary text-primary-foreground rounded font-label-caps text-[10px]">1W</button>
               <button className="px-3 py-1 bg-surface-container rounded font-label-caps text-[10px]">1M</button>
               <button className="px-3 py-1 bg-surface-container rounded font-label-caps text-[10px]">ALL</button>
               <a href="/portfolio" className="ml-4 px-3 py-1 border border-primary text-primary rounded font-label-caps text-[10px] hover:bg-primary/5 transition-colors">VIEW FULL</a>
@@ -306,7 +320,12 @@ const PortfolioAnalyticsPreview = () => {
               <h4 className="font-headline-sm mb-2">Oracle Premium</h4>
               <p className="text-body-md text-on-primary-container/80 mb-4">Unlock advanced trace depth and lower trade fees with the Premium pass.</p>
             </div>
-            <button className="w-full bg-primary-fixed text-on-primary-fixed py-3 rounded font-bold font-label-caps text-[12px] tracking-widest">UPGRADE NOW</button>
+            <Link 
+              href="/premium" 
+              className="w-full bg-primary-fixed text-on-primary-fixed py-3 rounded font-bold font-label-caps text-[12px] tracking-widest text-center hover:brightness-110 transition-all"
+            >
+              UPGRADE NOW
+            </Link>
           </div>
         </div>
       </div>
@@ -321,7 +340,7 @@ const CTA = () => {
         <h2 className="font-display-lg text-display-lg mb-8">Ready to predict the future?</h2>
         <p className="text-surface-variant max-w-xl mx-auto mb-10 text-body-lg">Join 10,000+ institutional analysts and traders leveraging OracleDesk for superior market edges.</p>
         <div className="flex flex-col sm:flex-row justify-center gap-4">
-          <button className="bg-secondary-fixed text-on-secondary-fixed px-10 py-5 rounded-lg font-bold font-label-caps tracking-widest hover:scale-105 transition-transform">CONNECT WALLET</button>
+          <button className="bg-secondary-fixed text-primary-foreground px-10 py-5 rounded-lg font-bold font-label-caps tracking-widest hover:scale-105 transition-transform">CONNECT WALLET</button>
           <button className="border border-outline-variant px-10 py-5 rounded-lg font-bold font-label-caps tracking-widest hover:bg-white/10 transition-colors">READ DOCUMENTATION</button>
         </div>
       </div>
@@ -331,13 +350,15 @@ const CTA = () => {
 
 export default function Home() {
   return (
-    <main className="pt-16">
-      <Ticker />
-      <Hero />
-      <MarketsGrid />
-      <ReasoningSection />
-      <PortfolioAnalyticsPreview />
-      <CTA />
-    </main>
+    <>
+      <main className="pt-16">
+        <Ticker />
+        <Hero />
+        <MarketsGrid />
+        <ReasoningSection />
+        <PortfolioAnalytics />
+        <CTA />
+      </main>
+    </>
   );
 }

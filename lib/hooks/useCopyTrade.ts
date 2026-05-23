@@ -11,11 +11,12 @@ import { polygonAmoy } from "@/lib/web3/chains";
 import {
   CONTRACTS,
   ERC20_ABI,
+  POLYMARKET_CTF_ABI,
   ORACLEDESK_BUILDER_CODE,
   parseUsdc,
   formatUsdc,
 } from "@/lib/web3/contracts";
-import { usePolymarketAllowance, useUsdcBalance } from "./useOracleDesk";
+import { initiateCopyTrade, confirmCopyTrade } from "@/lib/api/trade";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -31,6 +32,8 @@ export type CopyTradeStep =
   | "error";
 
 export interface CopyTradeParams {
+  /** Reasoning trace ID from backend */
+  traceId: string;
   /** Arc market ID (bytes32 hex) */
   marketId: `0x${string}`;
   /** Polymarket condition ID for the target market */
@@ -131,19 +134,22 @@ export function useCopyTrade(): CopyTradeResult {
       }
 
       try {
-        // ── Step 1: Ensure we're on Polygon ──────────────────────────────────
+        // ── Step 1: Initiate trade tracking on backend ───────────────────────
+        setStep("checking_allowance"); 
+        const { copyTradeId } = await initiateCopyTrade({
+          traceId: params.traceId,
+          marketId: params.marketId,
+          amount: params.usdcAmount,
+          userWallet: address,
+        });
+
+        // ── Step 2: Ensure we're on Polygon ──────────────────────────────────
         if (chainId !== polygonAmoy.id) {
           setStep("switching_chain");
           await switchChainAsync({ chainId: polygonAmoy.id });
         }
 
         const usdcRaw = parseUsdc(params.usdcAmount);
-
-        // ── Step 2: Check USDC allowance ──────────────────────────────────────
-        setStep("checking_allowance");
-
-        // We read allowance inline to avoid stale closure values
-        // (alternatively pass in from usePolymarketAllowance)
 
         // ── Step 3: Approve USDC if needed ───────────────────────────────────
         // We request max approval so subsequent copy-trades don't need another tx.
@@ -170,10 +176,6 @@ export function useCopyTrade(): CopyTradeResult {
         }
 
         // ── Step 5: Submit the copy-trade to Polymarket ───────────────────────
-        // Real impl: fetch best ask from Polymarket CLOB → sign typed-data → fillOrder
-        // Hackathon demo: we construct the order struct and call fillOrder directly.
-        // The builder code is included as the `taker` field set to the builder address,
-        // which Polymarket V2 uses to attribute referral fees.
         setStep("submitting_trade");
 
         const order = buildPolymarketOrderCalldata({
@@ -185,47 +187,19 @@ export function useCopyTrade(): CopyTradeResult {
           builderCode: ORACLEDESK_BUILDER_CODE,
         });
 
-        // NOTE: In production, sign order with signTypedData() first, then call fillOrder.
-        // For the demo we call the contract directly; the exchange will revert if the
-        // signature is missing — replace with full signed flow before mainnet.
         const tradeTx = await fillOrder({
           address: CONTRACTS.polygon.polymarketCTFExchange,
-          abi: [
-            {
-              type: "function",
-              name: "fillOrder",
-              stateMutability: "nonpayable",
-              inputs: [
-                {
-                  name: "order",
-                  type: "tuple",
-                  components: [
-                    { name: "salt", type: "uint256" },
-                    { name: "maker", type: "address" },
-                    { name: "signer", type: "address" },
-                    { name: "taker", type: "address" },
-                    { name: "tokenId", type: "uint256" },
-                    { name: "makerAmount", type: "uint256" },
-                    { name: "takerAmount", type: "uint256" },
-                    { name: "expiration", type: "uint256" },
-                    { name: "nonce", type: "uint256" },
-                    { name: "feeRateBps", type: "uint256" },
-                    { name: "side", type: "uint8" },
-                    { name: "signatureType", type: "uint8" },
-                    { name: "signature", type: "bytes" },
-                  ],
-                },
-                { name: "fillAmount", type: "uint256" },
-              ],
-              outputs: [],
-            },
-          ] as const,
+          abi: POLYMARKET_CTF_ABI,
           functionName: "fillOrder",
           args: [order, usdcRaw],
           chainId: polygonAmoy.id,
         });
 
         setTxHash(tradeTx);
+        
+        // ── Step 6: Confirm trade on backend ─────────────────────────────────
+        await confirmCopyTrade(copyTradeId, tradeTx);
+
         setStep("waiting_fill");
 
         // Final: wait for fill confirmation

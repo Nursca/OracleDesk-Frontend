@@ -3,7 +3,7 @@
 import React, { createContext, useMemo, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { WagmiProvider, cookieToInitialState, useAccountEffect, type Config } from "wagmi";
+import { WagmiProvider, cookieToInitialState, useAccount, useAccountEffect, type Config } from "wagmi";
 import { createAppKit } from '@reown/appkit/react'
 import { clearAuthSession } from "@/lib/api/client";
 import { connectWalletToBackend } from "@/lib/api/auth";
@@ -40,23 +40,27 @@ export const Web3ModalContext = createContext<Web3ModalContextValue | undefined>
 
 const WalletConnectionRedirect = () => {
   const router = useRouter();
+  const { address, isConnected } = useAccount();
+  const [lastConnectedAddress, setLastConnectedAddress] = React.useState<string | null>(null);
 
-  useAccountEffect({
-    onConnect({ address, isReconnected }) {
+  React.useEffect(() => {
+    if (isConnected && address && address !== lastConnectedAddress) {
+      setLastConnectedAddress(address);
       connectWalletToBackend(address)
-        .catch((error) => {
-          console.error("Backend wallet auth failed", error);
-        })
-        .finally(() => {
-          if (!isReconnected) {
+        .then(() => {
+          // Only redirect if it's a fresh connection, not a session restoration
+          if (!lastConnectedAddress) {
             router.push("/markets");
           }
+        })
+        .catch((error) => {
+          console.error("Backend wallet auth failed", error);
         });
-    },
-    onDisconnect() {
+    } else if (!isConnected) {
+      setLastConnectedAddress(null);
       clearAuthSession();
-    },
-  });
+    }
+  }, [isConnected, address, lastConnectedAddress, router]);
 
   return null;
 };

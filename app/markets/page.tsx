@@ -3,6 +3,9 @@
 import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import Link from "next/link";
+import { io } from "socket.io-client";
+import { useMarkets } from "@/lib/hooks/useMarkets";
+import { formatUsdc } from "@/lib/web3/contracts";
 
 const FilterBar = () => {
   return (
@@ -124,26 +127,32 @@ const TradingFeed = () => {
   ]);
 
   useEffect(() => {
-    const interval = setInterval(() => {
+    const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "https://oracledesk-backend.onrender.com";
+    const socket = io(API_URL.replace("/api/v1", ""));
+
+    socket.on("connect", () => {
+      console.log("Connected to Trading Feed socket");
+    });
+
+    socket.on("TRADE_EXECUTED", (data) => {
       const now = new Date();
       const time = now.toLocaleTimeString('en-GB', { hour12: false });
-      const markets = ["US Elections 2024", "Fed Rate Cut Sept", "ETH ATH 2024", "SpaceX Tower Catch", "Gold $2.7k", "Ceasefire Sept"];
-      const market = markets[Math.floor(Math.random() * markets.length)];
-      const bet = Math.random() > 0.5 ? "YES" : "NO";
-      const size = "$" + (Math.floor(Math.random() * 90) + 10) + ",000";
       
       const newEntry = {
         time,
-        market,
-        size,
-        bet,
-        prob: "64% → 64.2%", // simplified
-        color: bet === "YES" ? "text-secondary" : "text-tertiary"
+        market: data.marketQuestion || "Market Trade",
+        size: "$" + data.amount.toLocaleString(),
+        bet: data.direction,
+        prob: data.probChange || "---",
+        color: data.direction === "YES" ? "text-secondary" : "text-tertiary"
       };
       
       setFeed(prev => [newEntry, ...prev.slice(0, 7)]);
-    }, 5000);
-    return () => clearInterval(interval);
+    });
+
+    return () => {
+      socket.disconnect();
+    };
   }, []);
 
   return (
@@ -191,79 +200,42 @@ const TradingFeed = () => {
 };
 
 export default function Markets() {
-  const markets = [
-    {
-      category: "Economics",
-      aiSignal: "SIGNAL",
-      aiStatus: "BULLISH",
-      expiry: "OCT 24",
-      title: "Will the Federal Reserve announce a rate cut of 50bps or more at the September FOMC meeting?",
-      yesProb: 64,
-      liquidity: "$1.24M",
-      volume24h: "+$242.5K"
-    },
-    {
-      category: "Crypto",
-      aiSignal: "NEUTRAL",
-      aiStatus: "STABLE",
-      expiry: "DEC 31",
-      title: "Will Ethereum (ETH) reach a new all-time high above $4,878 before January 1st, 2025?",
-      yesProb: 22,
-      liquidity: "$892.1K",
-      volume24h: "-$12.8K"
-    },
-    {
-      category: "Geopolitics",
-      aiSignal: "VOLATILE",
-      aiStatus: "UNSTABLE",
-      expiry: "NOV 05",
-      title: "Who will win the 2024 United States Presidential Election according to official AP certification?",
-      yesProb: 51,
-      liquidity: "$14.2M",
-      volume24h: "+$1.1M"
-    },
-    {
-      category: "Tech",
-      aiSignal: "SIGNAL",
-      aiStatus: "POSITIVE",
-      expiry: "OCT 10",
-      title: "Will SpaceX successfully land the Starship booster on the launch tower in its next flight attempt?",
-      yesProb: 74,
-      liquidity: "$455.0K",
-      volume24h: "+$62.1K"
-    },
-    {
-      category: "Economics",
-      aiSignal: "NEUTRAL",
-      aiStatus: "STABLE",
-      expiry: "NOV 30",
-      title: "Will the price of Gold (XAU) reach $2,700/oz before November 30th?",
-      yesProb: 41,
-      liquidity: "$1.1M",
-      volume24h: "-$4.2K"
-    },
-    {
-      category: "Geopolitics",
-      aiSignal: "SIGNAL",
-      aiStatus: "BEARISH",
-      expiry: "SEP 30",
-      title: "Will a ceasefire be signed between Israel and Hezbollah by the end of September?",
-      yesProb: 8,
-      liquidity: "$630.0K",
-      volume24h: "+$31.4K"
-    }
-  ];
+  const { data, isLoading, error } = useMarkets();
+  const marketsData = data?.markets ?? [];
 
   return (
     <div className="min-h-screen bg-surface">
       <main className="pt-24 pb-12 px-gutter max-w-container-max-width mx-auto">
         <FilterBar />
         
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-          {markets.map((m, i) => (
-            <MarketCard key={i} {...m} />
-          ))}
-        </div>
+        {isLoading ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+            {[...Array(6)].map((_, i) => (
+              <div key={i} className="h-64 bg-surface-container-low animate-pulse rounded-xl border border-outline-variant"></div>
+            ))}
+          </div>
+        ) : error ? (
+          <div className="text-center py-12 bg-surface-container-low rounded-xl border border-error/20">
+            <span className="material-symbols-outlined text-error text-4xl mb-4">error</span>
+            <p className="text-on-surface-variant font-medium">Failed to load markets. Please check if the backend is running.</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+            {marketsData.map((m) => (
+              <MarketCard 
+                key={m.id} 
+                category={m.category}
+                aiSignal="SIGNAL"
+                aiStatus="BULLISH"
+                expiry={new Date(m.expiryTimestamp).toLocaleDateString('en-US', { month: 'short', year: '2-digit' }).toUpperCase()}
+                title={m.question}
+                yesProb={m.currentYesProb ?? m.initialYesProb}
+                liquidity={`$${(m.totalLiquidity / 1000000).toLocaleString()}M`}
+                volume24h="+$0.0K"
+              />
+            ))}
+          </div>
+        )}
 
         <TradingFeed />
       </main>
