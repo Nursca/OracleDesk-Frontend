@@ -10,7 +10,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "sync:bindings": "node scripts/sync-bindings.mjs",
-    "check:bindings": "node scripts/sync-bindings.mjs --check"
+    "check:bindings": "node scripts/sync-bindings.mjs --check",
+    "e2e:testnet": "vitest run --config vitest.e2e.config.mts"
   },
   "dependencies": {
     "@creit.tech/stellar-wallets-kit": "2.5.0",
